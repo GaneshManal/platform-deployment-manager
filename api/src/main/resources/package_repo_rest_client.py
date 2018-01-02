@@ -23,6 +23,12 @@ import logging
 import requests
 from  exceptiondef import NotFound
 
+from requests.exceptions import ConnectionError
+from requests.exceptions import HTTPError
+from requests.exceptions import Timeout
+from requests.exceptions import TooManyRedirects
+from requests.exceptions import RequestException
+
 
 class PackageRepoRestClient(object):
     def __init__(self, api_url, package_local_dir_path):
@@ -74,9 +80,16 @@ class PackageRepoRestClient(object):
             expected_codes = [200]
         url = self.api_url + path
         logging.debug("GET: " + url)
-        response = requests.get(url, timeout=120)
+
+        try:
+            response = requests.get(url, timeout=120)
+        except (ConnectionError, HTTPError, Timeout, TooManyRedirects):
+            raise Exception("Unable to connect to the Package Repository Server")
+
         logging.debug("response code: " + str(response.status_code))
+
         if (404 not in expected_codes) and (response.status_code == 404):
-            raise NotFound(path)
-        assert response.status_code in expected_codes
+            raise NotFound('Request URL Not found - ' + url)
+        assert response.status_code in expected_codes, response.text
+
         return response

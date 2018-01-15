@@ -21,7 +21,9 @@ either express or implied.
 import json
 import logging
 import requests
-from  exceptiondef import NotFound
+import re
+from exceptiondef import NotFound, FailedConnection
+from requests.exceptions import ConnectionError, HTTPError, Timeout, TooManyRedirects, RequestException
 
 
 class PackageRepoRestClient(object):
@@ -69,14 +71,32 @@ class PackageRepoRestClient(object):
         response = self.make_rest_get_request(url)
         return json.loads(response.content)
 
+    @staticmethod
+    def parse_error_msg_from_html_response(html_str):
+        title_tag = re.search('<title>(.+?)<.*/title>', html_str)
+        if title_tag:
+            cause_msg = re.sub('<[A-Za-z\/][^>]*>', '', title_tag.group())
+            return cause_msg
+        return html_str
+
     def make_rest_get_request(self, path, expected_codes=None):
         if not expected_codes:
             expected_codes = [200]
         url = self.api_url + path
         logging.debug("GET: " + url)
-        response = requests.get(url, timeout=120)
+
+        try:
+            response = requests.get(url, timeout=120)
+        except (ConnectionError, HTTPError, Timeout, TooManyRedirects, RequestException):
+            raise FailedConnection('Unable to connect to the Package Repository Manager')
+
         logging.debug("response code: " + str(response.status_code))
+
         if (404 not in expected_codes) and (response.status_code == 404):
-            raise NotFound(path)
-        assert response.status_code in expected_codes
+            raise NotFound('Package Repository Manager - URL Not found: ' + path)
+
+        # Return the response in case status code is not 200
+        error_msg = PackageRepoRestClient.parse_error_msg_from_html_response(response.text)
+        assert response.status_code in expected_codes, 'Package Repository Manager - ' + error_msg
+
         return response

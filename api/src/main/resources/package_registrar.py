@@ -29,6 +29,11 @@ from Hbase_thrift import AlreadyExists
 from package_parser import PackageParser
 from deployer_utils import HDFS
 
+import thriftpy
+from thriftpy.transport import TTransportException
+from exceptiondef import FailedConnection
+
+
 class HbasePackageRegistrar(object):
     COLUMN_DEPLOY_STATUS = "cf:deploy_status"
 
@@ -130,12 +135,17 @@ class HbasePackageRegistrar(object):
     def list_packages(self):
         logging.debug("List all packages")
 
-        connection = happybase.Connection(self._hbase_host)
+        connection = None
         try:
+            connection = happybase.Connection(self._hbase_host)
             table = connection.table(self._table_name)
             result = [key for key, _ in table.scan(columns=['cf:name'])]
+        except TTransportException:
+            logging.debug("Unable to connect to HBase Service")
+            raise FailedConnection('Unable to connect to the HBase master')
         finally:
-            connection.close()
+            if connection:
+                connection.close()
         return result
 
     def generate_record(self, metadata):

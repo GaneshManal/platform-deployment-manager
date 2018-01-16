@@ -92,11 +92,12 @@ class PackageRepoRestClient(object):
 
         logging.debug("response code: " + str(response.status_code))
 
-        if (404 not in expected_codes) and (response.status_code == 404):
-            raise NotFound('Package Repository Manager - URL Not found: ' + path)
-
         # Return the response in case status code is not 200
         error_msg = PackageRepoRestClient.parse_error_msg_from_html_response(response.text)
+
+        if response.status_code == 404:
+            error_msg += ' - ' + path
+
         assert response.status_code in expected_codes, 'Package Repository Manager - ' + error_msg
 
         return response
